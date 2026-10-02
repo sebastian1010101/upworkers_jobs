@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum BudgetType {
+  FIXED
+  HOURLY
+  UNKNOWN
+}
+
+enum JobStatus {
+  NEW
+  IGNORED
+  SAVED
+}
+
+enum JobSource {
+  MANUAL
+  UPWORK
+}
+
+enum NotificationChannel {
+  WHATSAPP
+}
+
+enum NotificationStatus {
+  PENDING
+  SENT
+  FAILED
+}
+
+enum WhatsAppAction {
+  PROPOSAL_REQUESTED
+  IGNORE
+  SAVE
+  SHOW_ANALYSIS
+  UNKNOWN
+}
+
+enum InboundMessageStatus {
+  RECEIVED
+  PROCESSED
+  FAILED
+}
+
+model Job {
+  id               String                   @id @default(uuid()) @db.Uuid
+  externalId       String                   @unique
+  title            String
+  description      String                   @db.Text
+  url              String?
+  budgetType       BudgetType               @default(UNKNOWN)
+  budgetMin        Decimal?                 @db.Decimal(12, 2)
+  budgetMax        Decimal?                 @db.Decimal(12, 2)
+  hourlyMin        Decimal?                 @db.Decimal(12, 2)
+  hourlyMax        Decimal?                 @db.Decimal(12, 2)
+  skills           String[]                 @default([])
+  clientCountry    String?
+  clientRating     Decimal?                 @db.Decimal(3, 2)
+  clientTotalSpent Decimal?                 @db.Decimal(14, 2)
+  proposalCount    Int?
+  publishedAt      DateTime?
+  discoveredAt     DateTime                 @default(now())
+  rawData          Json                     @default("{}")
+  status           JobStatus                @default(NEW)
+  filterReasons    String[]                 @default([])
+  filteredAt       DateTime?
+  source           JobSource                @default(MANUAL)
+  expiresAt        DateTime?
+  analysis         JobAnalysis?
+  proposalDraft    ProposalDraft?
+  notifications    Notification[]
+  inboundMessages  WhatsAppInboundMessage[]
+
+  @@index([discoveredAt])
+  @@index([source, expiresAt])
+}
+
+model ProposalDraft {
+  id         String    @id @default(uuid()) @db.Uuid
+  jobId      String    @unique @db.Uuid
+  content    String    @db.Text
+  model      String
+  approved   Boolean   @default(false)
+  approvedAt DateTime?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+  job        Job       @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}
+
+model WhatsAppInboundMessage {
+  id                String               @id @default(uuid()) @db.Uuid
+  externalMessageId String               @unique
+  jobId             String?              @db.Uuid
+  sender            String
+  text              String
+  action            WhatsAppAction
+  status            InboundMessageStatus @default(RECEIVED)
+  attemptCount      Int                  @default(1)
+  errorMessage      String?
+  receivedAt        DateTime             @default(now())
+  updatedAt         DateTime             @updatedAt
+  processedAt       DateTime?
+  job               Job?                 @relation(fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([status, receivedAt])
+  @@index([jobId, action])
+}
+
+model Notification {
+  id                String              @id @default(uuid()) @db.Uuid
+  jobId             String              @db.Uuid
+  channel           NotificationChannel
+  status            NotificationStatus  @default(PENDING)
+  attemptCount      Int                 @default(1)
+  externalMessageId String?
+  errorCode         String?
+  errorMessage      String?
+  sentAt            DateTime?
+  createdAt         DateTime            @default(now())
+  updatedAt         DateTime            @updatedAt
+  job               Job                 @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@unique([jobId, channel])
+  @@index([status, createdAt])
+}
+
+model JobAnalysis {
+  id                  String   @id @default(uuid()) @db.Uuid
+  jobId               String   @unique @db.Uuid
+  score               Decimal  @db.Decimal(3, 1)
+  llmScore            Decimal  @db.Decimal(3, 1)
+  ruleScore           Decimal  @db.Decimal(3, 1)
+  clientScore         Decimal  @db.Decimal(3, 1)
+  technicalScore      Decimal  @db.Decimal(3, 1)
+  experienceScore     Decimal  @db.Decimal(3, 1)
+  portfolioScore      Decimal  @db.Decimal(3, 1)
+  communicationScore  Decimal  @db.Decimal(3, 1)
+  competitionScore    Decimal  @db.Decimal(3, 1)
+  llmCompetitionScore Decimal  @db.Decimal(3, 1)
+  strengths           String[] @default([])
+  weaknesses          String[] @default([])
+  recommendation      String   @db.Text
+  shouldNotify        Boolean
+  model               String
+  analyzedAt          DateTime @default(now())
+  scoredAt            DateTime @default(now())
+  job                 Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+}

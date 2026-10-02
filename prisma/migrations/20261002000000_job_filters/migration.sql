@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Job"
+ADD COLUMN "filterReasons" TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[],
+ADD COLUMN "filteredAt" TIMESTAMP(3);
